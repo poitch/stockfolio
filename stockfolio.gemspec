@@ -2,7 +2,7 @@ require 'rubygems' unless Object.const_defined?(:Gem)
 require File.dirname(__FILE__) + "/lib/stockfolio/version"
 
 Gem::Specification.new do |spec|
-    spec.name = "StockFolio"
+    spec.name = "stockfolio"
     spec.version = StockFolio::VERSION
     spec.authors = ["Jerome Poichet"]
     spec.email = "poitch@gmail.com"

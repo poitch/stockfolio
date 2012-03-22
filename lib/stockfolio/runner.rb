@@ -112,7 +112,14 @@ class StockFolio::Runner < Boson::Runner
 
     desc 'Create Portfolio'
     def create(name)
+        p = Portfolio.all(:name => name)
+        if p.size > 0
+            puts "Portfolio \"#{name}\" already exists"
+            exit
+        end
+
         Portfolio.create(:name => name, :created_at => DateTime.now)
+        puts "Created portfolio \"#{name}\""
     end
 
     desc 'Add to watchlist'
@@ -121,11 +128,11 @@ class StockFolio::Runner < Boson::Runner
         quote = StockFolio::Web.quote(symbol)
         if nil != quote
             quote.each do |q|
-                WatchList.create(
+                item = WatchList.create(
                     :symbol => "#{q["e"]}:#{q["t"]}",
                     :created_at => DateTime.now
                 )
-                puts "Added #{q["t"]}"
+                puts "Added #{item.symbol} to watchlist - current price $#{q['l']}"
             end
         end
     end
@@ -151,13 +158,12 @@ class StockFolio::Runner < Boson::Runner
         end
 
         portfolio = portfolios[0]
-        puts "Portfolio #{portfolio.id} - #{portfolio.name}"
 
         # Validate the symbol
         quote = StockFolio::Web.quote(options[:symbol])
         if nil == quote
-            puts "Symbol #{options[:symbol]} not found"
-            return
+            puts "Symbol \"#{options[:symbol]}\" not found"
+            exit
         end
 
         transaction = Transaction.new(
@@ -173,9 +179,9 @@ class StockFolio::Runner < Boson::Runner
         )
         transaction.fee = options[:fee] if options[:fee]
         transaction.executed_at = DateTime.parse(options[:date]) if options[:date]
-
-
         transaction.save
+
+        puts "Added #{transaction.order_name} of #{transaction.quantity} #{transaction.symbol} to #{portfolio.name}"
 
     end
 

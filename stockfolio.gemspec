@@ -11,6 +11,10 @@ Gem::Specification.new do |spec|
     spec.executables = %w(stockfolio)
     spec.add_dependency 'boson'
     spec.add_dependency 'hirb'
+    spec.add_dependency 'data_mapper'
+    spec.add_dependency 'dm-migrations'
+    spec.add_dependency 'dm-sqlite-adapter'
+    spec.add_dependency 'json'
     spec.files = Dir.glob(%w[{lib}/**/*.rb bin/*])
     spec.require_paths << "lib"
 end

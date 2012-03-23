@@ -19,7 +19,6 @@ class StockFolio::Web
         s = startDate.strftime("%b+%d,+%Y")
         e = endDate.strftime("%b+%d,+%Y")
         url = "http://finance.google.com/finance/historical?q=#{symbol}&startdate=#{s}&enddate=#{e}&output=csv"
-        puts " -> #{url}"
 
         resp = Net::HTTP.get_response(URI.parse(url))
         data = resp.body

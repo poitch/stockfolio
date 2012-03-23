@@ -3,4 +3,9 @@
 $LOAD_PATH << './lib'
 
 require 'stockfolio'
-StockFolio::Runner.start
+begin
+    StockFolio::Runner.start
+rescue Boson::OptionParser::Error => e
+    puts e.message
+    exit 1
+end

@@ -12,9 +12,44 @@ class StockFolio::Runner < Boson::Runner
         option :date, :type => :string, :desc => 'Transaction date'
     end
 
+    def version
+        require 'stockfolio/version'
+        require 'stockfolio/check'
+        puts StockFolio::VERSION
+        if StockFolio::Check.has_newer
+            puts "There is a more recent version #{StockFolio::Check.version_available}"
+        end
+    end
+
+    desc "Current quote for a stock"
     def quote(symbol)
         quote = StockFolio::Web.quote(symbol)
         print_quotes(quote)
+    end
+
+    desc "Historical prices for a stock"
+    def historical(symbol,start_date,end_date)
+        history = StockFolio::Web.historical(symbol, DateTime.parse(start_date), DateTime.parse(end_date))
+        puts Hirb::Helpers::Table.render(history, :fields => [:date, :open, :close, :low, :high, :volume])
+    end
+
+    desc "Search symbol"
+    def search(term)
+        matches = StockFolio::Web.search(term)
+
+        lines = []
+        matches.each do |match|
+            if match['e'].length > 0 && match['t'].length > 0
+            line = {
+                :Symbol => "#{match['e']}:#{match['t']}",
+                :Name => match['n']
+            }
+            lines << line
+            end
+        end
+
+        puts Hirb::Helpers::Table.render(lines, :fields => [:Symbol, :Name])
+
     end
 
     desc 'List porfolios'
@@ -122,6 +157,72 @@ class StockFolio::Runner < Boson::Runner
         puts "Created portfolio \"#{name}\""
     end
 
+    desc 'List transactions for a portfolio'
+    def transactions(name)
+        p = Portfolio.first(:name => name)
+        if p == nil
+            puts "Portfolio #{name} not found"
+            exit
+        end
+
+        transactions = []
+        p.transactions.each do |transaction|
+            transactions << {
+                :id => transaction.id,
+                :symbol => transaction.symbol,
+                :quantity => transaction.quantity,
+                :price => transaction.price,
+                :executed_at => transaction.executed_at,
+                :fee => transaction.fee,
+                :created_at => transaction.created_at
+            }
+        end
+        puts Hirb::Helpers::Table.render(transactions, fields: [:id, :symbol, :quantity, :price, :fee, :executed_at, :created_at])
+
+    end
+
+    def delete(type,alpha,beta = nil)
+        if type == "transaction"
+            name = alpha
+            id = beta
+            puts "Deleting transaction #{id} from #{name}"
+
+            portfolio = Portfolio.first(:name => name)
+            if portfolio == nil
+                puts "Portfolio #{name} not found"
+                exit
+            end
+
+            transaction = Transaction.get(id)
+
+            if transaction != nil && transaction.portfolio == portfolio
+                transaction.destroy!
+            else
+                puts "Could not find transaction #{id} in portfolio #{name}"
+            end
+
+        elsif type == "portfolio"
+            name = alpha
+            puts "Deleting portfolio #{name}"
+
+            portfolio = Portfolio.first(:name => name)
+            if portfolio == nil
+                puts "Portfolio #{name} not found"
+                exit
+            end
+
+            portfolio.transactions.each do |transaction|
+                transaction.destroy!
+            end
+            portfolio.destroy!
+
+        end
+    end
+
+    #
+    # WATCHLIST
+    # 
+
     desc 'Add to watchlist'
     def watch(symbol)
         # Validate symbol
@@ -134,6 +235,15 @@ class StockFolio::Runner < Boson::Runner
                 )
                 puts "Added #{item.symbol} to watchlist - current price $#{q['l']}"
             end
+        end
+    end
+
+    desc 'Remove from watchlist'
+    def unwatch(symbol)
+        item = WatchList.first(:symbol => symbol)
+        if item != nil
+            item.destroy
+            puts "Removed #{symbol} from watchlist"
         end
     end
 

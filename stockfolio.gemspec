@@ -15,7 +15,6 @@ Gem::Specification.new do |spec|
     spec.add_dependency 'dm-migrations'
     spec.add_dependency 'dm-sqlite-adapter'
     spec.add_dependency 'json'
-    spec.add_dependency 'uri'
     spec.add_dependency 'gems'
     spec.files = Dir.glob(%w[{lib}/**/*.rb bin/*])
     spec.require_paths << "lib"

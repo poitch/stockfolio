@@ -31,6 +31,22 @@ class StockFolio::Runner < Boson::Runner
     def historical(symbol,start_date,end_date)
         history = StockFolio::Web.historical(symbol, DateTime.parse(start_date), DateTime.parse(end_date))
         puts Hirb::Helpers::Table.render(history, :fields => [:date, :open, :close, :low, :high, :volume])
+        # http://tagaholic.me/hirb/doc/classes/Hirb/Helpers/Table.html#M000008
+        # :headers => { :date => "Date", ... }
+        # :description => false
+        # :filters => { :date => lambda { |f} }}
+        # https://github.com/change/method_profiler/blob/master/lib/method_profiler/hirb.rb
+    end
+
+    def graph_historical(symbol,start_date,end_date)
+        history = StockFolio::Web.historical(symbol, DateTime.parse(start_date), DateTime.parse(end_date))
+
+        values = []
+        history.each do |row|
+            values << row[:close]
+        end
+        values.reverse!
+        StockFolio::ConsoleGraph.new(values)
     end
 
     desc "Search symbol"
@@ -71,8 +87,16 @@ class StockFolio::Runner < Boson::Runner
         portfolios = []
         if nil == name
             portfolios = Portfolio.all
+            if portfolios.size == 0
+                puts "No portfolio found"
+                exit
+            end
         else
             portfolios = Portfolio.all(:name => name)
+            if portfolios.size == 0
+                puts "Portfolio #{name} not found"
+                exit
+            end
         end
 
         positions = {}
@@ -108,28 +132,54 @@ class StockFolio::Runner < Boson::Runner
         end
 
         pos = []
+
+        total = {}
+        total[:symbol] = "Total"
+        total[:daygain] = 0
+        total[:cost] = 0
+        total[:value] = 0
+        total[:gain] = 0
+
         positions.each do |symbol,position|
             p = {}
-            p["Symbol"] = symbol.split(":")[1]
-            p["Last Price"] = "$#{position[:l].to_f.round(2)}"
-            p["Change"] = "#{position[:c]} (#{position[:cp]}%)"
+            p[:symbol] = symbol.split(":")[1]
+            p[:last_price] = position[:l].to_f
+            p[:change] = "#{position[:c]} (#{position[:cp]}%)"
 
             if position[:quantity] > 0
-                p["Day's Gain"] = (position[:quantity] * position[:c].to_f).round(2)
-                p["Shares"] = position[:quantity]
-                p["Cost Basis"] = "$#{position[:cost].round(2)}"
-                p["Market Value"] = "$#{position[:value].round(2)}"
-                p["Gain"] = "$#{(position[:value] - position[:cost]).round(2)}"
-                p["Gain %"] = "#{(100.0 * (position[:value] - position[:cost]) / position[:cost]).round(1)}%"
+                p[:daygain] = position[:quantity] * position[:c].to_f
+                p[:quantity] = position[:quantity]
+                p[:cost] = position[:cost].to_f
+                p[:value] = position[:value].to_f
+                p[:gain] = position[:value] - position[:cost]
+                p[:gain_p] = (position[:value] - position[:cost]) / position[:cost]
+
+                total[:daygain] = total[:daygain] + p[:daygain]
+                total[:cost] = total[:cost] + position[:cost]
+                total[:value] = total[:value] + position[:value]
+                total[:gain] = total[:gain] + position[:value] - position[:cost]
             else
-                p["Gain"] = "$#{(0 - position[:balance]).round(2)}"
-                p["Gain %"] = "#{(100.0 * (0 - position[:balance]) / position[:cost]).round(1)}%"
+                p[:gain] = (0 - position[:balance])
+                p[:gain_p] = (0 - position[:balance]) / position[:cost]
+
             end
             pos << p
         end
 
-        puts Hirb::Helpers::Table.render(pos, :fields => ["Symbol", "Last Price", "Change", "Day's Gain", "Shares", "Cost Basis", "Market Value", "Gain", "Gain %"])
-        
+        pos.sort! { |a,b| a[:symbol] <=> b[:symbol] }
+
+        total[:gain_p] = (total[:value] - total[:cost]) / total[:cost]
+
+        pos << total
+
+        puts Hirb::Helpers::Table.render(pos, 
+            :fields => [:symbol, :last_price, :change, :daygain, :quantity, :cost, :value, :gain, :gain_p],
+            :headers => {:symbol => "Symbol", :last_price => "Last Price", :change => "Change", :daygain => "Day's Gain", :quantity => "Shares", :cost => "Cost Basis", :value => "Market Value", :gain => "Gain", :gain_p => "Gain %"},
+            :filters => { :last_price => :to_dollars, :daygain => :to_dollars, :cost => :to_dollars, :value => :to_dollars, :gain => :to_dollars, :gain_p => :to_percent },
+            :description => false
+
+                                        )
+        puts "Market is #{StockFolio::Web.market_status}"
     end
 
     common_transaction_options
@@ -298,12 +348,38 @@ class StockFolio::Runner < Boson::Runner
     def print_quotes(quote)
         if nil != quote
             # Beautify those
+            extended = false
+            quote.sort! { |a,b| a["t"] <=> b["t"] }
             quote.each do |q|
-                q["Symbol"] = q["t"]
-                q["Last Price"] = "$#{q["l"]}"
-                q["Change"] = "#{q["c"]} (#{q["cp"]}%)"
+                #q["Symbol"] = q["t"]
+                #q["Last Price"] = "$#{q["l"]}"
+
+                #q["t"] = "#{q["e"]}:#{q["t"]}"
+                q[:change] = "#{q["c"]} (#{q["cp"]}%)"
+                if q["el"]
+                    q[:echange] = "#{q["ec"]} (#{q["ecp"]}%)"
+                    extended = true
+                else
+                    q["elt"] = q["lt"]
+                end
             end
-            puts Hirb::Helpers::Table.render(quote, fields: ["Symbol", "Last Price", "Change"])
+            headers = { "t" => "Symbol", "l" => "Last Price", :change => "Change", "lt" => "Last Updated" }
+            
+            fields = ["t", "l", :change, "lt"]
+            filters = { "l" => :to_dollars }
+
+            if extended
+                fields = ["t", "l", :change, "el", :echange, "elt"]
+                headers = { "t" => "Symbol", "l" => "Close Price", :change => "Change", "el" => "After Hours Price", :echange => "After Hours Change", "elt" => "Last Updated" }
+                filters = { "l" => :to_dollars, "el" => :to_dollars }
+            end
+
+            puts Hirb::Helpers::Table.render(quote, 
+                     :fields => fields,
+                     :headers => headers,
+                     :filters => filters,
+                     :description => false
+            )
         end
  
     end

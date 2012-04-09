@@ -1,8 +1,10 @@
 #!/usr/bin/env ruby
 
-$LOAD_PATH << './lib'
+$: << File.dirname($0) + "/../lib"
 
+require 'rubygems'
 require 'stockfolio'
+
 begin
     StockFolio::Runner.start
 rescue Boson::OptionParser::Error => e

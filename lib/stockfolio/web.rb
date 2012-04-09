@@ -12,7 +12,9 @@ class StockFolio::Web
         if data.empty?
             return nil
         end
-        JSON.parse(data.slice(3, data.length).strip)
+        r = JSON.parse(data.slice(3, data.length).strip)
+        #puts r
+        r
     end
 
     def self.historical(symbol, startDate, endDate)
@@ -59,4 +61,27 @@ class StockFolio::Web
         result["matches"]
     end
 
+    def self.market_status()
+        url = "http://www.nasdaq.com/dynamic_includes/marketstatus.js"
+        resp = Net::HTTP.get_response(URI.parse(url))
+        data = resp.body
+        if data.empty?
+            return false
+        end
+
+        parts = data.split('=')
+        status = parts[1].gsub('"', '').gsub(';', '').strip
+        if status == "O"
+            return "Opened"
+        elsif status == "A"
+            return "After hours"
+        elsif status == "C"
+            return "Closed"
+        else
+            return nil
+        end
+ 
+    end
+
 end
+
